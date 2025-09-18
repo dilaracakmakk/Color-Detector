@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Renk Paleti Çıkarıcı</title>
+  <style>
+    :root{--b:#e5e7eb;--t:#111827;--m:#6b7280}
+    body{font-family:system-ui,Arial;margin:24px;max-width:1100px;color:var(--t)}
+    h1{margin:0 0 12px}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .panel{border:1px solid var(--b);border-radius:12px;padding:12px;margin-top:12px}
+    .drop{border:2px dashed var(--b);border-radius:12px;padding:18px;text-align:center;cursor:pointer}
+    .muted{color:var(--m)}
+    #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:12px}
+    .item{display:flex;gap:10px;align-items:center;border:1px solid var(--b);border-radius:10px;padding:6px 8px}
+    .sw{width:28px;height:28px;border:1px solid var(--b);border-radius:6px}
+    input[type=number]{width:90px}
+    button{padding:8px 12px;border:1px solid var(--b);border-radius:10px;background:#fff;cursor:pointer}
+    button.primary{background:#111827;color:#fff;border-color:#111827}
+    .pill{padding:4px 8px;border:1px solid var(--b);border-radius:999px;font-size:12px}
+    #preview{max-width:100%;display:none;margin-top:10px;border-radius:8px}
+  </style>
+</head>
+<body>
+  <h1>Renk Paleti Çıkarıcı</h1>
+
+  <div class="panel">
+    <div class="row">
+      <div id="drop" class="drop" tabindex="0">
+        Görseli buraya <b>sürükle-bırak</b> ya da tıkla
+        <br/><span class="muted">PNG / JPG, şeffaf pikseller sayılmaz</span>
+        <input type="file" id="file" accept="image/*" style="display:none"/>
+      </div>
+      <div class="row" style="margin-left:auto">
+        <label>Hassasiyet <span class="muted">(1=tam, 8/16 ≈ ton birleştirir)</span>:
+          <input id="step" type="number" min="1" max="64" value="1"/>
+        </label>
+        <label>Top N:
+          <input id="topn" type="number" min="1" max="500" value="100"/>
+        </label>
+        <label>Quantize K:
+          <input id="k" type="number" min="2" max="64" value="16"/>
+        </label>
+      </div>
+    </div>
+    <img id="preview" alt="preview"/>
+    <div class="row" style="margin-top:10px">
+      <button id="analyze" class="primary">Tüm Renkleri Çıkar</button>
+      <button id="downloadCsv" disabled>CSV indir (tüm renkler)</button>
+      <span class="pill muted" id="meta">Hazır</span>
+      <span style="flex:1"></span>
+      <button id="quantize">K-Means Quantize</button>
+      <button id="exportGpl" disabled>.gpl palet indir</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="muted" id="info">İlk N sonucu listeliyorum; kutucuğa tıklayınca HEX kopyalanır.</div>
+    <div id="grid"></div>
+  </div>
+
+  <canvas id="cv" style="display:none"></canvas>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
