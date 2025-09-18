@@ -1,4 +1,3 @@
-// Element helpers
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
 const drop = $("#drop");
@@ -15,6 +14,15 @@ const grid = $("#grid");
 const preview = $("#preview") as HTMLImageElement;
 const cv = $("#cv") as HTMLCanvasElement;
 const ctx = cv.getContext("2d")!;
+
+// === Bölgesel analiz kontrolleri ===
+const regionMode = document.getElementById("regionMode") as HTMLInputElement;
+const clearRegionBtn = document.getElementById("clearRegion") as HTMLButtonElement;
+
+// --- Bölgesel analiz state ---
+let selecting = false;
+let selStart: { x: number; y: number } | null = null;
+let selRect:  { x: number; y: number; w: number; h: number } | null = null;
 
 type Row = { hex: string; r: number; g: number; b: number; count: number; ratio: number; };
 
@@ -88,6 +96,57 @@ function analyze(step = 1, topN = 100) {
   meta.textContent = `Piksel: ${total.toLocaleString('tr-TR')} • Benzersiz: ${rows.length.toLocaleString('tr-TR')} • Hassasiyet:${s}`;
   downloadCsvBtn.disabled = rows.length === 0;
   exportGplBtn.disabled = true;
+}
+
+// === Bölgesel analiz: yardımcılar ===
+function getMousePos(e: MouseEvent) {
+  const r = cv.getBoundingClientRect();
+  const x = Math.round((e.clientX - r.left) * (cv.width / r.width));
+  const y = Math.round((e.clientY - r.top)  * (cv.height / r.height));
+  return { x, y };
+}
+
+function drawSelection() {
+  if (!selRect) return;
+  const { x, y, w, h } = selRect;
+  ctx.save();
+  ctx.strokeStyle = "#2563EB";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+
+// === Bölgesel analiz: sadece seçili dikdörtgeni işle ===
+function analyzeRegion(step = 1, topN = 100) {
+  if (!selRect) { meta.textContent = "Önce bir bölge seçin."; return; }
+  const { x, y, w, h } = selRect;
+  if (w < 2 || h < 2) { meta.textContent = "Seçim çok küçük."; return; }
+
+  const { data } = ctx.getImageData(x, y, w, h);
+  const total = w * h;
+  const s = Math.max(1, Number(step) || 1);
+  const map = new Map<number, number>();
+
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+    if (a === 0) continue;
+    if (s > 1) { r = roundStep(r, s); g = roundStep(g, s); b = roundStep(b, s); }
+    const key = (r << 16) | (g << 8) | b;
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+
+  const rows: Row[] = [];
+  for (const [key, count] of map.entries()) {
+    const r = (key >> 16) & 255, g = (key >> 8) & 255, b = key & 255;
+    rows.push({ hex: toHex(r, g, b), r, g, b, count, ratio: count / total });
+  }
+  rows.sort((a, b) => b.count - a.count);
+
+  lastAllRows = rows;
+  render(rows.slice(0, Math.min(topN, rows.length)));
+  meta.textContent = `Bölge: ${w}×${h} • Benzersiz: ${rows.length.toLocaleString('tr-TR')} • Hassasiyet:${s}`;
+  downloadCsvBtn.disabled = rows.length === 0;
 }
 
 function downloadCSV(rows: Row[], filename: string) {
@@ -191,6 +250,8 @@ function handleFiles(files: FileList | null) {
     meta.textContent = `Yüklendi: ${f.name} (${img.width}×${img.height})`;
     grid.innerHTML = ""; lastAllRows = null; lastQuantized = null;
     downloadCsvBtn.disabled = true; exportGplBtn.disabled = true;
+    // yeni bir görsel yüklendiğinde seçim çerçevesini temizle
+    selRect = null;
   };
 }
 
@@ -200,10 +261,46 @@ drop.addEventListener("dragleave", () => (drop as HTMLElement).style.background 
 drop.addEventListener("drop", e => { e.preventDefault(); (drop as HTMLElement).style.background = ""; handleFiles(e.dataTransfer?.files || null); });
 fileInput.addEventListener("change", () => handleFiles(fileInput.files));
 
+// === Canvas event'leri: bölge seçimi ===
+cv.addEventListener("mousedown", (e) => {
+  if (!regionMode?.checked) return;
+  selecting = true;
+  selStart = getMousePos(e);
+  selRect  = { x: selStart.x, y: selStart.y, w: 0, h: 0 };
+});
+
+cv.addEventListener("mousemove", (e) => {
+  if (!regionMode?.checked || !selecting || !selStart || !loadedImg) return;
+  const pos = getMousePos(e);
+  selRect = {
+    x: Math.min(selStart.x, pos.x),
+    y: Math.min(selStart.y, pos.y),
+    w: Math.abs(pos.x - selStart.x),
+    h: Math.abs(pos.y - selStart.y),
+  };
+  // resmi yeniden çiz + seçim overlay
+  ctx.drawImage(loadedImg, 0, 0, cv.width, cv.height);
+  drawSelection();
+});
+
+cv.addEventListener("mouseup", () => {
+  selecting = false;
+});
+
+clearRegionBtn?.addEventListener("click", () => {
+  selRect = null;
+  if (loadedImg) ctx.drawImage(loadedImg, 0, 0, cv.width, cv.height);
+});
+
+// === Analyze: bölge modu destekli ===
 analyzeBtn.addEventListener("click", () => {
   if (!loadedImg) { meta.textContent = "Önce görsel seçin."; return; }
-  analyze(Number(stepInput.value || 1), Number(topnInput.value || 100));
+  const step = Number(stepInput.value || 1);
+  const topN = Number(topnInput.value || 100);
+  if (regionMode?.checked && selRect) analyzeRegion(step, topN);
+  else analyze(step, topN);
 });
+
 downloadCsvBtn.addEventListener("click", () => {
   if (!lastAllRows) return;
   downloadCSV(lastAllRows, "colors_all.csv");

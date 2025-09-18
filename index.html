@@ -60,6 +60,32 @@
     <div id="grid"></div>
   </div>
 
+<label class="pill">
+  <input id="regionMode" type="checkbox" /> Bölge seç </label>
+  <button id="clearnRegion"> Seçimi temizle</button>
+  <label>Simulasyon:
+    <select id="cvd">
+      <option value="none">Yok</option>
+      <option value="protan">Protanopia</option>
+      <option value="deutan">Deuteranopia</option>
+      <option value="tritan">Tritanopia</option>
+    </select>
+  </label>
+
+
+
+  
+  <button id="applyCvd">Uygula</button>
+  <button id="resetCvd">Geri al</button>
+
+  <input id="files" type="file" accept="image/*" multiple />
+  <button id="analyzeBatch"> Toplu analiz</button>
+  <button id="mergePalette"> Merge palet</button>
+  <div id="batch"></div>
+
+
+
+  
   <canvas id="cv" style="display:none"></canvas>
   <script type="module" src="/src/main.ts"></script>
 </body>
