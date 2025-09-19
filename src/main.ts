@@ -19,10 +19,17 @@ const ctx = cv.getContext("2d")!;
 const regionMode = document.getElementById("regionMode") as HTMLInputElement;
 const clearRegionBtn = document.getElementById("clearRegion") as HTMLButtonElement;
 
-// --- Bölgesel analiz state ---
+
+const cvdSel=document.getElementById("cvd") as HTMLSelectElement;
+const applyCvdBtn=document.getElementById("applyCvd") as HTMLButtonElement;
+const resetCvdBtn=document.getElementById("resetCvd") as HTMLButtonElement;
+
+ // --- Bölgesel analiz state ---
 let selecting = false;
 let selStart: { x: number; y: number } | null = null;
 let selRect:  { x: number; y: number; w: number; h: number } | null = null;
+
+let originalImageData: ImageData | null = null;
 
 type Row = { hex: string; r: number; g: number; b: number; count: number; ratio: number; };
 
@@ -149,6 +156,58 @@ function analyzeRegion(step = 1, topN = 100) {
   downloadCsvBtn.disabled = rows.length === 0;
 }
 
+
+const CVD_MATS: Record<"protan"|"deutan"|"tritan", number[][]> = {
+  protan: [
+    [0.56667, 0.43333, 0.00000],
+    [0.55833, 0.44167, 0.00000],
+    [0.00000, 0.24167, 0.75833],
+  ],
+  deutan: [
+    [0.62500, 0.37500, 0.00000],
+    [0.70000, 0.30000, 0.00000],
+    [0.00000, 0.30000, 0.70000],
+  ],
+  tritan: [
+    [0.95000, 0.05000, 0.00000],
+    [0.00000, 0.43333, 0.56667],
+    [0.00000, 0.47500, 0.52500],
+  ],
+};
+
+function applyCvd(type: "protan"|"deutan"|"tritan") {
+  if (!loadedImg) return;
+
+  if (!originalImageData) originalImageData = ctx.getImageData(0, 0, cv.width, cv.height);
+
+  const img = ctx.getImageData(0, 0, cv.width, cv.height);
+  const data = img.data;
+  const M = CVD_MATS[type];
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const rn = M[0][0]*r + M[0][1]*g + M[0][2]*b;
+    const gn = M[1][0]*r + M[1][1]*g + M[1][2]*b;
+    const bn = M[2][0]*r + M[2][1]*g + M[2][2]*b;
+    data[i]   = Math.max(0, Math.min(255, Math.round(rn)));
+    data[i+1] = Math.max(0, Math.min(255, Math.round(gn)));
+    data[i+2] = Math.max(0, Math.min(255, Math.round(bn)));
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function resetCvd() {
+  if (originalImageData) {
+    ctx.putImageData(originalImageData, 0, 0);
+    originalImageData = null;
+  } else if (loadedImg) {
+    ctx.drawImage(loadedImg, 0, 0, cv.width, cv.height);
+  }
+}
+
+
+
+
 function downloadCSV(rows: Row[], filename: string) {
   const header = "hex,r,g,b,count,ratio\n";
   const body = rows.map(r => `${r.hex},${r.r},${r.g},${r.b},${r.count},${r.ratio.toFixed(6)}`).join("\n");
@@ -250,10 +309,10 @@ function handleFiles(files: FileList | null) {
     meta.textContent = `Yüklendi: ${f.name} (${img.width}×${img.height})`;
     grid.innerHTML = ""; lastAllRows = null; lastQuantized = null;
     downloadCsvBtn.disabled = true; exportGplBtn.disabled = true;
-    // yeni bir görsel yüklendiğinde seçim çerçevesini temizle
+  
     selRect = null;
+    originalImageData = null;
   };
-}
 
 drop.addEventListener("click", () => fileInput.click());
 drop.addEventListener("dragover", e => { e.preventDefault(); (drop as HTMLElement).style.background = "#fafafa"; });
@@ -315,3 +374,11 @@ exportGplBtn.addEventListener("click", () => {
   if (!lastQuantized) return;
   exportGPL(lastQuantized, `palette_K${kInput.value}`);
 });
+
+applyCvdBtn?.addEventListener("click", () => {
+  const v = (cvdSel?.value || "none") as "none"|"protan"|"deutan"|"tritan";
+  if (v === "none") resetCvd();
+  else applyCvd(v);
+});
+
+resetCvdBtn?.addEventListener("click", resetCvd);}
